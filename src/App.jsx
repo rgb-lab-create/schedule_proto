@@ -254,18 +254,44 @@ function TaskColorPicker({ palette, value, onChange }) {
 
 // ─── TIME RANGE INPUT ─────────────────────────────────────────────────────────
 
+function TimeSelectInput({ value, onChange, t }) {
+  const st = makeStyles(t);
+  const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+  const minutes = ["00", "10", "20", "30", "40", "50"];
+  const [h, m] = value ? value.split(":") : ["", ""];
+
+  const handleH = (newH) => {
+    const curM = m || "00";
+    onChange(`${newH}:${curM}`);
+  };
+  const handleM = (newM) => {
+    const curH = h || "00";
+    onChange(`${curH}:${newM}`);
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+      <select value={h || ""} onChange={e => handleH(e.target.value)}
+        style={{ ...st.input, width: 52, padding: "5px 4px", cursor: "pointer" }}>
+        <option value="">--</option>
+        {hours.map(hh => <option key={hh} value={hh}>{hh}시</option>)}
+      </select>
+      <select value={m || ""} onChange={e => handleM(e.target.value)}
+        style={{ ...st.input, width: 52, padding: "5px 4px", cursor: "pointer" }}>
+        <option value="">--</option>
+        {minutes.map(mm => <option key={mm} value={mm}>{mm}분</option>)}
+      </select>
+    </div>
+  );
+}
+
 function TimeRangeInput({ entry, onChange, onAdd, onRemove, t }) {
   const st = makeStyles(t);
-  const handleTime = (field, val) => onChange({ ...entry, [field]: snapTo10(val) });
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 5, flexWrap: "wrap" }}>
-      <input type="time" value={entry.start || ""} step="600"
-        onChange={e => handleTime("start", e.target.value)}
-        style={{ ...st.input, width: 98 }} />
+      <TimeSelectInput value={entry.start || ""} onChange={val => onChange({ ...entry, start: val })} t={t} />
       <span style={{ color: t.textMuted, fontSize: 11 }}>~</span>
-      <input type="time" value={entry.end || ""} step="600"
-        onChange={e => handleTime("end", e.target.value)}
-        style={{ ...st.input, width: 98 }} />
+      <TimeSelectInput value={entry.end || ""} onChange={val => onChange({ ...entry, end: val })} t={t} />
       <button onClick={onAdd} style={st.smallBtn("rgba(74,122,90,0.7)")}>+구간</button>
       {onRemove && <button onClick={onRemove} style={st.smallBtn("rgba(122,74,74,0.7)")}>✕</button>}
     </div>
@@ -330,7 +356,7 @@ function TaskItem({ task, palette, onUpdate, onComplete, categories, t }) {
               <TaskColorPicker palette={palette} value={task.color} onChange={c => onUpdate({ ...task, color: c })} />
             </div>
           </div>
-          <span style={{ fontSize: 11, color: t.textSub }}>수행 시간 구간 (10분 단위)</span>
+          <span style={{ fontSize: 11, color: t.textSub }}>수행 시간 구간</span>
           {(task.timeRanges || []).map((r, i) => (
             <TimeRangeInput key={i} entry={r} t={t}
               onChange={v => updateRange(i, v)}
@@ -358,9 +384,11 @@ function AddTaskForm({ palette, categories, onAdd, onClose, t }) {
   const [color, setColor] = useState(colors[0]);
   const st = makeStyles(t);
 
+  const isSleep = cat === "잠";
+
   const handleAdd = () => {
-    if (!content.trim()) return;
-    onAdd({ category: cat, content: content.trim(), color });
+    if (!isSleep && !content.trim()) return;
+    onAdd({ category: cat, content: isSleep ? "잠" : content.trim(), color });
     setContent("");
   };
 
@@ -375,9 +403,11 @@ function AddTaskForm({ palette, categories, onAdd, onClose, t }) {
           style={{ ...st.input, cursor: "pointer" }}>
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <input value={content} onChange={e => setContent(e.target.value)}
-          placeholder="할 일 입력..." onKeyDown={e => e.key === "Enter" && handleAdd()}
-          style={{ ...st.input, flex: 1, minWidth: 100 }} />
+        {!isSleep && (
+          <input value={content} onChange={e => setContent(e.target.value)}
+            placeholder="할 일 입력..." onKeyDown={e => e.key === "Enter" && handleAdd()}
+            style={{ ...st.input, flex: 1, minWidth: 100 }} />
+        )}
       </div>
       <TaskColorPicker palette={palette} value={color} onChange={setColor} />
       <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
@@ -956,13 +986,17 @@ function CharacterOverlay({ onShowEncouragement, t }) {
             position: "absolute", bottom: "115%", left: "50%", transform: "translateX(-50%)",
             background: t.bubbleBg,
             border: `1px solid ${t.panelBorder}`,
-            borderRadius: 12, padding: "8px 13px",
+            borderRadius: 14, padding: "9px 14px",
             fontSize: 12, color: t.text,
             boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
             animation: "fadeIn 0.3s ease",
             pointerEvents: "none",
-            maxWidth: 190, textAlign: "center",
-            whiteSpace: "normal", lineHeight: 1.5,
+            width: 180,
+            textAlign: "center",
+            wordBreak: "keep-all",
+            overflowWrap: "break-word",
+            whiteSpace: "normal",
+            lineHeight: 1.7,
             zIndex: 600,
           }}>
             {bubble}
