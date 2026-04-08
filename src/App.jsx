@@ -298,9 +298,121 @@ function TimeRangeInput({ entry, onChange, onAdd, onRemove, t }) {
   );
 }
 
+// ─── SUBTASK LIST ─────────────────────────────────────────────────────────────
+
+function SubTaskList({ subTasks, onUpdate, t }) {
+  const [newText, setNewText] = useState("");
+  const st = makeStyles(t);
+  const items = subTasks || [];
+
+  const addSub = () => {
+    if (!newText.trim()) return;
+    onUpdate([...items, { id: Date.now().toString(), text: newText.trim(), checked: false }]);
+    setNewText("");
+  };
+
+  const toggle = (id) => {
+    onUpdate(items.map(s => s.id === id ? { ...s, checked: !s.checked } : s));
+  };
+
+  const remove = (id) => onUpdate(items.filter(s => s.id !== id));
+
+  const move = (idx, dir) => {
+    const arr = [...items];
+    const target = idx + dir;
+    if (target < 0 || target >= arr.length) return;
+    [arr[idx], arr[target]] = [arr[target], arr[idx]];
+    onUpdate(arr);
+  };
+
+  const doneCount = items.filter(s => s.checked).length;
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+        <span style={{ fontSize: 11, color: t.textSub, fontWeight: 700 }}>📎 세부 목표</span>
+        {items.length > 0 && (
+          <span style={{ fontSize: 10, color: t.textMuted }}>({doneCount}/{items.length})</span>
+        )}
+      </div>
+
+      {items.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 3, marginBottom: 6 }}>
+          {items.map((sub, idx) => (
+            <div key={sub.id} style={{
+              display: "flex", alignItems: "center", gap: 4,
+              background: sub.checked
+                ? (t === THEMES.dark ? "rgba(80,160,100,0.08)" : "rgba(80,160,100,0.06)")
+                : (t === THEMES.dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)"),
+              borderRadius: 7, padding: "4px 7px",
+              opacity: sub.checked ? 0.6 : 1,
+            }}>
+              {/* Priority arrows */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
+                <button
+                  onClick={() => move(idx, -1)}
+                  disabled={idx === 0}
+                  style={{
+                    background: "none", border: "none", padding: 0,
+                    color: idx === 0 ? t.textMuted : t.textSub,
+                    cursor: idx === 0 ? "default" : "pointer",
+                    fontSize: 8, lineHeight: 1, opacity: idx === 0 ? 0.3 : 0.7,
+                  }}>▲</button>
+                <button
+                  onClick={() => move(idx, 1)}
+                  disabled={idx === items.length - 1}
+                  style={{
+                    background: "none", border: "none", padding: 0,
+                    color: idx === items.length - 1 ? t.textMuted : t.textSub,
+                    cursor: idx === items.length - 1 ? "default" : "pointer",
+                    fontSize: 8, lineHeight: 1, opacity: idx === items.length - 1 ? 0.3 : 0.7,
+                  }}>▼</button>
+              </div>
+
+              {/* Check button */}
+              <button onClick={() => toggle(sub.id)} style={{
+                width: 18, height: 18, borderRadius: 5, border: "none", flexShrink: 0,
+                background: sub.checked ? "rgba(80,160,100,0.5)" : t.btnSecondary,
+                color: sub.checked ? "#7ad098" : t.textMuted,
+                cursor: "pointer", fontSize: 10,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>{sub.checked ? "✓" : "○"}</button>
+
+              {/* Text */}
+              <span style={{
+                fontSize: 12, color: t.text, flex: 1,
+                textDecoration: sub.checked ? "line-through" : "none",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>{sub.text}</span>
+
+              {/* Remove */}
+              <button onClick={() => remove(sub.id)} style={{
+                background: "none", border: "none", color: t.textMuted,
+                cursor: "pointer", fontSize: 11, flexShrink: 0, padding: "0 2px",
+              }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add row */}
+      <div style={{ display: "flex", gap: 4 }}>
+        <input
+          value={newText}
+          onChange={e => setNewText(e.target.value)}
+          placeholder="세부 목표 추가..."
+          onKeyDown={e => e.key === "Enter" && addSub()}
+          style={{ ...st.input, flex: 1, minWidth: 0, fontSize: 11, padding: "4px 8px" }}
+        />
+        <button onClick={addSub} style={{ ...st.smallBtn("rgba(74,90,122,0.6)"), padding: "3px 8px" }}>+</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── TASK ITEM ────────────────────────────────────────────────────────────────
 
-function TaskItem({ task, palette, onUpdate, onComplete, categories, t }) {
+function TaskItem({ task, palette, onUpdate, onComplete, categories, t, isFirst, isLast, onMoveUp, onMoveDown }) {
   const [expanded, setExpanded] = useState(false);
   const st = makeStyles(t);
 
@@ -321,6 +433,9 @@ function TaskItem({ task, palette, onUpdate, onComplete, categories, t }) {
   };
   const removeRange = (i) => onUpdate({ ...task, timeRanges: (task.timeRanges || []).filter((_, idx) => idx !== i) });
 
+  const subDone = (task.subTasks || []).filter(s => s.checked).length;
+  const subTotal = (task.subTasks || []).length;
+
   return (
     <div style={{
       background: t.taskBg, borderRadius: 12,
@@ -328,7 +443,30 @@ function TaskItem({ task, palette, onUpdate, onComplete, categories, t }) {
       borderLeft: `4px solid ${task.color || "#888"}`,
       marginBottom: 8, padding: "9px 11px",
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+
+        {/* Priority arrows — task level */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
+          <button
+            onClick={onMoveUp}
+            disabled={isFirst}
+            style={{
+              background: "none", border: "none", padding: 0,
+              color: isFirst ? t.textMuted : t.textSub,
+              cursor: isFirst ? "default" : "pointer",
+              fontSize: 9, lineHeight: 1, opacity: isFirst ? 0.25 : 0.65,
+            }}>▲</button>
+          <button
+            onClick={onMoveDown}
+            disabled={isLast}
+            style={{
+              background: "none", border: "none", padding: 0,
+              color: isLast ? t.textMuted : t.textSub,
+              cursor: isLast ? "default" : "pointer",
+              fontSize: 9, lineHeight: 1, opacity: isLast ? 0.25 : 0.65,
+            }}>▼</button>
+        </div>
+
         <div style={{ width: 7, height: 7, borderRadius: "50%", background: task.color || "#888", flexShrink: 0 }} />
         <span style={{
           fontSize: 10, background: statusInfo.bg, borderRadius: 5,
@@ -338,6 +476,16 @@ function TaskItem({ task, palette, onUpdate, onComplete, categories, t }) {
         <span style={{ fontSize: 13, color: t.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {task.content}
         </span>
+
+        {/* Sub-task progress badge */}
+        {subTotal > 0 && (
+          <span style={{
+            fontSize: 10, color: t.textMuted, flexShrink: 0,
+            background: t.taskBg, borderRadius: 5,
+            padding: "1px 5px", border: `1px solid ${t.panelBorder}`,
+          }}>{subDone}/{subTotal}</span>
+        )}
+
         <button onClick={() => setExpanded(!expanded)} style={{
           background: "none", border: "none", color: t.textMuted, cursor: "pointer", fontSize: 12, padding: "0 3px", flexShrink: 0,
         }}>{expanded ? "▲" : "▼"}</button>
@@ -368,6 +516,14 @@ function TaskItem({ task, palette, onUpdate, onComplete, categories, t }) {
               + 시간 입력 시작
             </button>
           )}
+          {/* Sub-tasks */}
+          <div style={{ borderTop: `1px solid ${t.panelBorder}`, marginTop: 10, paddingTop: 2 }}>
+            <SubTaskList
+              subTasks={task.subTasks || []}
+              onUpdate={subs => onUpdate({ ...task, subTasks: subs })}
+              t={t}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -1059,6 +1215,7 @@ export default function App() {
   const [showYearly, setShowYearly] = useState(false);
   const [isDark, setIsDark] = useState(true);
   const [showParticles, setShowParticles] = useState(false);
+  const [showCharacter, setShowCharacter] = useState(true);
 
   const t = isDark ? THEMES.dark : THEMES.light;
   const st = makeStyles(t);
@@ -1093,11 +1250,23 @@ export default function App() {
   const addTask = (taskData) => {
     const task = {
       id: Date.now().toString(), ...taskData,
-      status: TASK_STATUS.TODO, timeRanges: [],
+      status: TASK_STATUS.TODO, timeRanges: [], subTasks: [],
       createdAt: new Date().toISOString(),
     };
     updateDayData(prev => ({ ...prev, tasks: [...(prev.tasks || []), task] }));
     setShowAddTask(false);
+  };
+
+  const moveTask = (id, dir) => {
+    updateDayData(prev => {
+      const tasks = [...(prev.tasks || [])];
+      const idx = tasks.findIndex(tk => tk.id === id);
+      if (idx < 0) return prev;
+      const target = idx + dir;
+      if (target < 0 || target >= tasks.length) return prev;
+      [tasks[idx], tasks[target]] = [tasks[target], tasks[idx]];
+      return { ...prev, tasks };
+    });
   };
 
   const updateTask = (updated) => {
@@ -1151,7 +1320,7 @@ export default function App() {
       `}</style>
 
       {/* Full-screen character */}
-      <CharacterOverlay onShowEncouragement={showEncouragement} t={t} />
+      {showCharacter && <CharacterOverlay onShowEncouragement={showEncouragement} t={t} />}
 
       {/* Particles on complete */}
       {showParticles && <DoneParticles onDone={() => setShowParticles(false)} />}
@@ -1169,6 +1338,15 @@ export default function App() {
             padding: "4px 11px", fontSize: 12,
           }}>
             {isDark ? "☀ 라이트" : "🌙 다크"}
+          </button>
+          <button onClick={() => setShowCharacter(v => !v)} style={{
+            ...st.smallBtn(
+              showCharacter ? "rgba(180,140,220,0.25)" : t.btnSecondary,
+              showCharacter ? "#c0a0e8" : t.textMuted
+            ),
+            padding: "4px 11px", fontSize: 12,
+          }}>
+            {showCharacter ? "🌟 캐릭터 ON" : "🌟 캐릭터 OFF"}
           </button>
         </div>
       </div>
@@ -1255,10 +1433,14 @@ export default function App() {
                   오늘의 할 일을 추가해보세요! 🌱
                 </div>
               )}
-              {todos.map(task => (
+              {todos.map((task, idx) => (
                 <div key={task.id} data-task-id={task.id}>
                   <TaskItem task={task} palette={palette} categories={categories}
-                    onUpdate={updateTask} onComplete={completeTask} t={t} />
+                    onUpdate={updateTask} onComplete={completeTask} t={t}
+                    isFirst={idx === 0} isLast={idx === todos.length - 1}
+                    onMoveUp={() => moveTask(task.id, -1)}
+                    onMoveDown={() => moveTask(task.id, 1)}
+                  />
                 </div>
               ))}
             </div>
